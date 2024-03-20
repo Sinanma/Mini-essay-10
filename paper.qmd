@@ -1,0 +1,158 @@
+---
+title: "Predicting Football Match Outcomes"
+author: 
+  - Sinan Ma
+thanks: "Code and data are available at: https://github.com/Sinanma/Mini-essay-10.git"
+date: today
+date-format: long
+format: pdf
+bibliography: references.bib
+---
+
+# Introduction
+
+In this essay, we explore the predictive power of shots on target and corner kicks on football match outcomes, focusing on the likelihood of a home team win and the number of goals scored by the home team. We employ logistic regression for the binary outcome of home team wins and compare Poisson and negative binomial regressions for count data of home team goals. 
+
+The dataset for the 2023/2024 Bundesliga 1 season, encompassing full-time and half-time results, match statistics, as well as match, total goals, and Asian Handicap odds, was sourced from Football-Data [@bundesliga_data_2023_2024]. Code is base on book *Telling Stories with Data* [@tellingstorieswithdata].
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(rstanarm)
+library(modelsummary)
+library(broom)
+```
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+# Read the dataset
+football <- read_csv("D1.csv")
+```
+
+# Data
+
+Our dataset comprises detailed match statistics from a football league, including shots on target (SOT) and corners (C) for each game. Initial exploratory data analysis revealed a positive correlation between the number of shots on target and home team victories, suggesting that teams with higher SOT are more likely to win. Similarly, corners showed a moderate positive correlation with home team wins, indicating their potential influence on the game's outcome.
+
+```{r}
+#| echo: false
+#| warning: false
+
+# Create a binary outcome variable for home team wins (1 = win, 0 = not win)
+football <- football |>
+  mutate(HomeWin = if_else(FTR == "H", 1, 0))
+
+# Relationship between Shots on Target (SOT), Corners (C), and Home Wins
+ggplot(football, aes(x = HST, y = HomeWin)) + 
+  geom_jitter(alpha = 0.5) + 
+  labs(title = "Relationship between Home Shots on Target and Home Wins", x = "Home Shots on Target", y = "Home Win") +
+  theme_minimal()
+
+ggplot(football, aes(x = HC, y = HomeWin)) + 
+  geom_jitter(alpha = 0.5) + 
+  labs(title = "Relationship between Home Corners and Home Wins", x = "Home Corners", y = "Home Win") +
+  theme_minimal()
+```
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+# Logistic Regression for Home Win Prediction
+football_logistic <- stan_glm(
+  HomeWin ~ HST + HC,
+  data = football,
+  family = binomial(link = "logit"),
+  seed = 853
+)
+```
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+# Poisson Regression for Home Goals Prediction
+football_poisson <- stan_glm(
+  FTHG ~ HST + HC,
+  data = football,
+  family = poisson(link = "log"),
+  seed = 853
+)
+```
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+# Negative Binomial Regression for Home Goals Prediction
+football_neg_binomial <- stan_glm(
+  FTHG ~ HST + HC,
+  data = football,
+  family = neg_binomial_2(link = "log"),
+  seed = 853
+)
+```
+
+# Logistic Regression for Home Team Wins
+
+In examining the impact of match activities on home team victories, our logistic regression analysis revealed some insightful trends. Notably, each additional home shot on target (HST) is associated with a notable increase in the probability of a home team win, as indicated by a coefficient of 0.327. This positive relationship suggests that more aggressive offensive play significantly enhances the chances of victory. Contrary to expectations, corners (HC) are inversely related to the probability of winning, with a coefficient of -0.101. This could imply that while corners represent offensive opportunities, they do not necessarily translate to wins and may require more information to understand this dynamic.
+
+# Poisson Regression for Home Team Goals
+
+The Poisson model we used to predict the count of home team goals, echoes the importance of shots on target. The coefficient of 0.161 for HST confirms a positive correlation with the number of goals, implying that direct shots on goal are an effective metric for success in scoring. The corner kicks' coefficient is slightly negative (-0.056), indicating a role of corners in goal-scoring that may not always align with increased goal counts.
+
+```{r}
+#| warning: false
+#| echo: false
+
+# Model Comparison and Evaluation
+modelsummary(
+  list(
+    "Logistic" = football_logistic,
+    "Poisson" = football_poisson
+  )
+)
+```
+
+# Model Comparison
+
+The comparison of the logistic and Poisson models using the provided data reveals contrasting performance. The logistic model's R2 value suggests a modest explanation of the variability in home wins. However, the Poisson model's significantly higher RMSE indicates a less accurate fit for predicting the number of home goals. Moreover, the vastly higher LOOIC and WAIC values for the Poisson model point to poorer predictive quality compared to the logistic model.
+
+# Model diagnostics
+
+The logistic regression diagnostic plot indicated a alignment between the observed binary outcomes of home team wins and the predicted probabilities, suggesting that the logistic model possesses adequate discriminative ability. 
+
+In contrast, the Poisson regression diagnostic plot revealed discrepancies between the observed and predicted counts of home goals, signaling potential overdispersion—an issue commonly rectified by employing a negative binomial regression. 
+
+```{r}
+#| warning: false
+#| echo: false
+
+# Graphical Model Checks
+# Logistic Regression Model Check
+pp_check(football_logistic) +
+  theme(legend.position = "bottom")
+
+# Poisson Regression Model Check
+pp_check(football_poisson) +
+  theme(legend.position = "bottom")
+
+```
+
+
+
+
+\newpage
+
+
+# References
+
+
